@@ -1,312 +1,97 @@
-import type { NoteWithDetail, Category, Tag, UnifiedItem, Platform } from '../types';
+import { itemFolder, type Item } from '../types';
 
-// Bilibili data types
-interface BilibiliMedia {
-  id: number;
-  type: number;
-  title: string;
-  cover: string;
-  intro: string;
-  page: number;
-  duration: number;
-  upper: {
-    mid: number;
-    name: string;
-    face: string;
-    jump_link: string;
-  };
-  cnt_info: {
-    collect: number;
-    play: number;
-    danmaku?: number;
-    view_text_1?: string;
-  };
-  link: string;
-  bv_id: string;
-  bvid: string;
-  fav_time: number;
-  [key: string]: any;
+/**
+ * 图床都有防盗链（B 站校验 Referer），浏览器从 localhost 直连会被 403。
+ * 统一走本地代理：服务端补 Referer 并落磁盘缓存。
+ *
+ * size 决定取多大：卡片要缩略图（B 站图床支持尾缀缩放，334KB → 16KB），
+ * 只有真正播放/看大图时才取原图。
+ */
+export type ImageSize = 'cover' | 'avatar' | 'full';
+
+const HDSLB = /^https?:\/\/[^/]*hdslb\.com\//i;
+
+const SIZE_SUFFIX: Record<Exclude<ImageSize, 'full'>, string> = {
+  cover: '@480w_360h_1c.webp',
+  avatar: '@72w_72h_1c.webp',
+};
+
+export function imageUrl(raw: string | undefined | null, size: ImageSize = 'full'): string {
+  if (!raw) return '';
+  if (raw.startsWith('/')) return raw;
+  if (!/^https?:\/\//i.test(raw)) return raw;
+  let target = raw;
+  if (size !== 'full' && HDSLB.test(raw) && !raw.includes('@')) {
+    target = raw + SIZE_SUFFIX[size];
+  }
+  return `/api/image?u=${encodeURIComponent(target)}`;
 }
 
-// Helper functions (need to be defined before they're used)
-
-// Get cover image URL (prefer url_default, fallback to url_pre)
-function getCoverImageUrl(note: NoteWithDetail): string {
-  if (note.detail?.note_card.image_list && note.detail.note_card.image_list.length > 0) {
-    return note.detail.note_card.image_list[0].url_default || note.detail.note_card.image_list[0].url_pre;
+/** 数据只有一个来源：本地 marksort 服务读 data/unified.json 后吐出来。 */
+export async function loadItems(): Promise<Item[]> {
+  const response = await fetch('/api/items');
+  if (!response.ok) {
+    throw new Error(`读取 /api/items 失败：HTTP ${response.status}`);
   }
-  if (note.cover) {
-    return note.cover.url_default || note.cover.url_pre;
-  }
-  return '';
+  const data = await response.json();
+  return Array.isArray(data) ? (data as Item[]) : [];
 }
 
-// Get first available video URL from note detail
-function getVideoUrl(note: NoteWithDetail): string | null {
-  if (!note.detail?.note_card.video?.media?.stream) {
-    return null;
-  }
+export interface Facet {
+  id: string;
+  name: string;
+  count: number;
+}
 
-  const stream = note.detail.note_card.video.media.stream;
-  
-  // Try different codecs in order: h264, h265, av1, h266
-  const codecOrder: Array<keyof typeof stream> = ['h264', 'h265', 'av1', 'h266'];
-  
-  for (const codec of codecOrder) {
-    const streamItems = stream[codec];
-    if (streamItems && streamItems.length > 0) {
-      // Get the first stream item's master_url
-      const firstUrl = streamItems[0]?.master_url;
-      if (firstUrl) {
-        return firstUrl;
-      }
+function tally(values: string[]): Facet[] {
+  const map = new Map<string, number>();
+  values.forEach((value) => map.set(value, (map.get(value) ?? 0) + 1));
+  return Array.from(map.entries())
+    .sort((a, b) => b[1] - a[1])
+    .map(([name, count]) => ({ id: name, name, count }));
+}
+
+export function platformFacets(items: Item[]): Facet[] {
+  return tally(items.map((item) => item.platform));
+}
+
+/** 收藏夹来自抓取时的原始字段，不是我们造的标签体系。 */
+export function folderFacets(items: Item[]): Facet[] {
+  return tally(items.map((item) => itemFolder(item) ?? '未归类'));
+}
+
+export interface Filters {
+  platform?: string | null;
+  folder?: string | null;
+  query?: string;
+}
+
+export function applyFilters(items: Item[], filters: Filters): Item[] {
+  const query = (filters.query ?? '').trim().toLowerCase();
+  return items.filter((item) => {
+    if (filters.platform && item.platform !== filters.platform) return false;
+    if (filters.folder) {
+      const folder = itemFolder(item) ?? '未归类';
+      if (folder !== filters.folder) return false;
     }
-  }
-  
-  // If no URL found in preferred codecs, try any available codec
-  for (const codec in stream) {
-    const streamItems = stream[codec as keyof typeof stream];
-    if (Array.isArray(streamItems) && streamItems.length > 0) {
-      const firstUrl = streamItems[0]?.master_url;
-      if (firstUrl) {
-        return firstUrl;
-      }
+    if (query) {
+      const haystack = `${item.title} ${item.description} ${item.author.name ?? ''}`.toLowerCase();
+      if (!haystack.includes(query)) return false;
     }
-  }
-  
-  return null;
-}
-
-// Generate original note URL
-function getNoteUrl(noteId: string, xsecToken: string): string {
-  const params = new URLSearchParams({ xsec_token: xsecToken });
-  return `https://www.xiaohongshu.com/explore/${noteId}?${params.toString()}`;
-}
-
-// Convert Xiaohongshu note to UnifiedItem
-function localizeUrl(url: string): string {
-  if (!url) return '';
-  url = url.split('!')[0];
-  url = url.split('?')[0];
-  let fileName = url.split('/').pop() || '';
-  if (fileName && !fileName.endsWith('.jpg')) {
-    fileName = fileName + '.jpg';
-  }
-  return `/images_rednote/${fileName}`;
-}
-function convertXiaohongshuNote(note: NoteWithDetail): UnifiedItem {
-  const title = note.detail?.note_card.title || note.display_title;
-  const description = note.detail?.note_card.desc || '';
-  const coverUrl = localizeUrl(getCoverImageUrl(note));
-  const author = note.detail?.note_card.user || note.user;
-  const tags = note.detail?.note_card.tag_list || [];
-  const interactInfo = note.detail?.note_card.interact_info || note.interact_info;
-  const videoUrl = getVideoUrl(note);
-  const noteUrl = getNoteUrl(note.note_id, note.xsec_token);
-
-  return {
-    platform: 'xiaohongshu',
-    id: note.note_id,
-    title,
-    description,
-    cover: coverUrl,
-    author: {
-      name: author.nickname,
-      avatar: localizeUrl(author.avatar),
-    },
-    url: noteUrl,
-    tags,
-    interactInfo: {
-      liked_count: interactInfo.liked_count,
-      collected_count: note.detail?.note_card.interact_info?.collected_count,
-      comment_count: note.detail?.note_card.interact_info?.comment_count,
-    },
-    videoUrl,
-    originalData: note,
-  };
-}
-
-// Convert Bilibili media to UnifiedItem
-function convertBilibiliMedia(media: BilibiliMedia): UnifiedItem {
-  const videoUrl = `https://www.bilibili.com/video/${media.bvid}`;
-  const coverFilename = media.cover ? media.cover.split('/').pop() || '' : '';
-  const coverUrl = coverFilename ? `/images_bilibili/${coverFilename}` : '';
-  
-  // Extract bilibili player parameters for iframe embedding
-  const bilibiliPlayerParams = media.ugc?.first_cid ? {
-    aid: media.id,
-    bvid: media.bvid,
-    cid: media.ugc.first_cid,
-    page: media.page || 1,
-  } : undefined;
-  
-  return {
-    platform: 'bilibili',
-    id: media.bvid || String(media.id),
-    title: media.title,
-    description: media.intro || '',
-    cover: coverUrl,
-    author: {
-      name: media.upper.name,
-      avatar: `/images_bilibili/${media.upper.face.split('/').pop() || ''}`,
-    },
-    url: videoUrl,
-    tags: [], // Bilibili media doesn't have tags in the current structure
-    interactInfo: {
-      collected_count: String(media.cnt_info.collect || 0),
-      play_count: media.cnt_info.view_text_1 || String(media.cnt_info.play || 0),
-    },
-    duration: media.duration,
-    bilibiliPlayerParams,
-    originalData: media,
-  };
-}
-
-// Load notes data from JSON file (legacy function, kept for compatibility)
-export async function loadNotes(): Promise<NoteWithDetail[]> {
-  try {
-    const response = await fetch('/notes.json');
-    if (!response.ok) {
-      throw new Error('Failed to load notes data');
-    }
-    const data = await response.json();
-    return Array.isArray(data) ? data : [];
-  } catch (error) {
-    console.error('Error loading notes:', error);
-    // Return empty array or sample data for development
-    return [];
-  }
-}
-
-// Load unified items from all platforms
-export async function loadUnifiedItems(): Promise<UnifiedItem[]> {
-  const items: UnifiedItem[] = [];
-  
-  try {
-    // Load Xiaohongshu data (rednote.json or notes.json)
-    try {
-      const response = await fetch('/rednote.json');
-      if (response.ok) {
-        const data = await response.json();
-        if (Array.isArray(data)) {
-          const notes: NoteWithDetail[] = data;
-          items.push(...notes.map(convertXiaohongshuNote));
-        }
-      }
-    } catch (error) {
-      console.warn('Failed to load rednote.json:', error);
-    }
-
-    // Try loading from notes.json as fallback
-    if (items.length === 0) {
-      try {
-        const notes = await loadNotes();
-        items.push(...notes.map(convertXiaohongshuNote));
-      } catch (error) {
-        console.warn('Failed to load notes.json:', error);
-      }
-    }
-  } catch (error) {
-    console.warn('Error loading Xiaohongshu data:', error);
-  }
-
-  // Load Bilibili data
-  try {
-    const response = await fetch('/bilibili.json');
-    if (response.ok) {
-      const data = await response.json();
-      if (Array.isArray(data)) {
-        const mediaList: BilibiliMedia[] = data;
-        items.push(...mediaList.map(convertBilibiliMedia));
-      }
-    }
-  } catch (error) {
-    console.warn('Error loading Bilibili data:', error);
-  }
-
-  return items;
-}
-
-// Extract all unique tags from unified items
-export function extractAllTags(items: UnifiedItem[]): Tag[] {
-  const tagMap = new Map<string, Tag>();
-  
-  items.forEach(item => {
-    item.tags.forEach(tag => {
-      if (!tagMap.has(tag.id)) {
-        tagMap.set(tag.id, tag);
-      }
-    });
-  });
-  
-  return Array.from(tagMap.values());
-}
-
-// Generate categories based on tags
-export function generateCategories(items: UnifiedItem[]): Category[] {
-  const tags = extractAllTags(items);
-  
-  // Create a category for each tag
-  const categories: Category[] = tags.map(tag => ({
-    id: tag.id,
-    name: tag.name,
-    tagIds: [tag.id]
-  }));
-  
-  // Add an "All" category
-  categories.unshift({
-    id: 'all',
-    name: '全部',
-    tagIds: []
-  });
-  
-  return categories;
-}
-
-// Filter unified items by category
-export function filterItemsByCategory(
-  items: UnifiedItem[], 
-  category: Category
-): UnifiedItem[] {
-  if (category.id === 'all') {
-    return items;
-  }
-  
-  return items.filter(item => {
-    // Items without tags (like Bilibili) will appear in "全部" category only
-    if (item.tags.length === 0) {
-      return false;
-    }
-    
-    const itemTagIds = item.tags.map(tag => tag.id);
-    return category.tagIds.some(tagId => itemTagIds.includes(tagId));
+    return true;
   });
 }
 
-// Get platform display name
-export function getPlatformName(platform: Platform): string {
-  const names: Record<Platform, string> = {
-    xiaohongshu: '小红书',
-    bilibili: 'B站',
-  };
-  return names[platform];
+export function formatDuration(seconds: number | null | undefined): string {
+  if (!seconds || seconds <= 0) return '';
+  const hours = Math.floor(seconds / 3600);
+  const minutes = Math.floor((seconds % 3600) / 60);
+  const secs = Math.floor(seconds % 60);
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return hours > 0 ? `${hours}:${pad(minutes)}:${pad(secs)}` : `${minutes}:${pad(secs)}`;
 }
 
-// Legacy function for backward compatibility
-export function filterNotesByCategory(
-  notes: NoteWithDetail[], 
-  category: Category
-): NoteWithDetail[] {
-  if (category.id === 'all') {
-    return notes;
-  }
-  
-  return notes.filter(note => {
-    if (!note.detail?.note_card.tag_list) {
-      return false;
-    }
-    
-    const noteTagIds = note.detail.note_card.tag_list.map(tag => tag.id);
-    return category.tagIds.some(tagId => noteTagIds.includes(tagId));
-  });
+export function totalHours(items: Item[]): number {
+  const total = items.reduce((sum, item) => sum + (item.media.duration ?? 0), 0);
+  return Math.round((total / 3600) * 10) / 10;
 }

@@ -1,0 +1,15 @@
+[project]
+name = "marksort"
+version = "0.1.0"
+description = "收藏的汇总、分类与门户：把各平台收藏抓下来、归类、以站点形式浏览"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+  "rnet>=0.2.0",
+  "xhshow>=0.2.0",
+  "beautifulsoup4>=4.12",
+  "tqdm>=4.66",
+]
+
+[tool.uv]
+package = false

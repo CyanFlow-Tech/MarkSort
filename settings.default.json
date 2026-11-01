@@ -1,0 +1,33 @@
+{
+  "$comment": "MarkSort 默认设置，入库维护。真实凭据写 settings.local.json（不入库），两者按层合并。${env:NAME} 会从环境变量取值。",
+  "core": {
+    "data_dir": "data",
+    "output": "data/unified.json"
+  },
+  "sources": {
+    "demo": {
+      "enabled": false,
+      "count": 3,
+      "with_media": true
+    },
+    "bilibili": {
+      "enabled": false,
+      "up_mid": "",
+      "sessdata": "${env:BILI_SESSDATA}",
+      "folders": [],
+      "page_size": 20,
+      "skip_invalid": true
+    },
+    "rednote": {
+      "enabled": false,
+      "user_id": "",
+      "a1": "${env:REDNOTE_A1}",
+      "web_session": "${env:REDNOTE_WEB_SESSION}",
+      "web_id": "${env:REDNOTE_WEB_ID}",
+      "max_pages": 200,
+      "page_delay": 2.0
+    }
+  },
+  "enrichers": {},
+  "sinks": {}
+}

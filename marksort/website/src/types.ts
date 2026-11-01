@@ -1,221 +1,43 @@
-// TypeScript types matching Python TypedDict definitions
+// 与后端 marksort/core/item.py 一一对应的前端类型。
+// 平台差异只体现在 media.kind 上，渲染层不认识「平台」这个概念。
 
-export type ImageScene = "WB_PRV" | "WB_DFT";
+export type Platform = string;
 
-export interface InfoList {
-  image_scene: ImageScene;
+export type MediaKind = 'iframe' | 'video' | 'image' | 'none';
+
+export interface Media {
+  kind: MediaKind;
   url: string;
+  params: Record<string, unknown>;
+  duration: number | null;
 }
 
-export interface Cover {
-  height: number;
-  width: number;
-  info_list: InfoList[];
-  url_pre: string;
-  url_default: string;
-}
-
-export interface User {
-  user_id: string;
-  nickname: string;
-  avatar: string;
-  xsec_token: string;
-}
-
-export interface InteractInfo {
-  liked: boolean;
-  liked_count: string;
-}
-
-export interface Note {
-  display_title: string;
-  type: "video";
-  cover: Cover;
-  user: User;
-  interact_info: InteractInfo;
-  xsec_token: string;
-  note_id: string;
-}
-
-export interface ImageInfo {
-  url: string;
-  image_scene: ImageScene;
-}
-
-export interface ImageListItem {
-  trace_id: string;
-  url_default: string;
-  live_photo: boolean;
-  width: number;
-  url: string;
-  info_list: ImageInfo[];
-  url_pre: string;
-  stream: Record<string, any>;
-  file_id: string;
-  height: number;
-}
-
-export interface ShareInfo {
-  un_share: boolean;
-}
-
-export interface InteractInfoDetail {
-  liked: boolean;
-  liked_count: string;
-  collected: boolean;
-  collected_count: string;
-  comment_count: string;
-  share_count: string;
-  followed: boolean;
-  relation: "none";
-}
-
-export interface VideoImage {
-  thumbnail_fileid: string;
-}
-
-export interface VideoCapa {
-  duration: number;
-}
-
-export interface VideoInfo {
-  biz_name: number;
-  biz_id: string;
-  duration: number;
-  md5: string;
-  hdr_type: number;
-  drm_type: number;
-  stream_types: number[];
-}
-
-export interface StreamItem {
-  video_duration: number;
-  audio_channels: number;
-  width: number;
-  audio_duration: number;
-  avg_bitrate: number;
-  backup_urls: string[];
-  hdr_type: number;
-  stream_desc: string;
-  psnr: number;
-  weight: number;
-  fps: number;
-  video_bitrate: number;
-  audio_codec: string;
-  audio_bitrate: number;
-  volume: number;
-  rotate: number;
-  master_url: string;
-  quality_type: string;
-  size: number;
-  duration: number;
-  vmaf: number;
-  ssim: number;
-  format: string;
-  default_stream: number;
-  height: number;
-  video_codec: string;
-  stream_type: number;
-}
-
-export interface VideoStream {
-  av1?: StreamItem[];
-  h264?: StreamItem[];
-  h265?: StreamItem[];
-  h266?: StreamItem[];
-}
-
-export interface VideoMedia {
-  video_id: number;
-  video: VideoInfo;
-  stream: VideoStream;
-}
-
-export interface VideoDetail {
-  image: VideoImage;
-  capa: VideoCapa;
-  media: VideoMedia;
-}
-
-export interface Tag {
-  id: string;
-  name: string;
-  type: "topic";
-}
-
-export interface UserDetail {
-  user_id: string;
-  nickname: string;
-  avatar: string;
-  xsec_token: string;
-}
-
-export interface NoteCard {
-  type: "video";
-  title: string;
-  desc: string;
-  user: UserDetail;
-  image_list: ImageListItem[];
-  share_info: ShareInfo;
-  note_id: string;
-  interact_info: InteractInfoDetail;
-  video: VideoDetail;
-  tag_list: Tag[];
-  at_user_list: any[];
-  time: number;
-  last_update_time: number;
-}
-
-export interface NoteDetail {
-  id: string;
-  model_type: "note";
-  note_card: NoteCard;
-}
-
-// Extended note with detail information for display
-export interface NoteWithDetail extends Note {
-  detail?: NoteDetail;
-}
-
-// Platform type
-export type Platform = 'xiaohongshu' | 'bilibili';
-
-// Category type
-export interface Category {
-  id: string;
-  name: string;
-  tagIds: string[];
-}
-
-// Unified item interface for multi-platform support
-export interface UnifiedItem {
+export interface Item {
+  schema_version: number;
   platform: Platform;
-  id: string;
+  external_id: string;
   title: string;
   description: string;
-  cover: string;
-  author: {
-    name: string;
-    avatar: string;
-  };
   url: string;
-  tags: Tag[];
-  interactInfo: {
-    liked_count?: string;
-    collected_count?: string;
-    comment_count?: string;
-    play_count?: string;
-  };
-  // Optional fields for video content
-  videoUrl?: string | null;
-  duration?: number;
-  // Bilibili iframe player parameters
-  bilibiliPlayerParams?: {
-    aid: number;
-    bvid: string;
-    cid: number;
-    page: number;
-  };
-  // Original data for platform-specific features
-  originalData: any;
+  cover: string;
+  author: { name?: string; avatar?: string; id?: string } & Record<string, unknown>;
+  tags: string[];
+  category: string | null;
+  summary: string | null;
+  stats: Record<string, string>;
+  media: Media;
+  collected_at: string | null;
+  raw: Record<string, unknown>;
+}
+
+export function itemKey(item: Item): string {
+  return `${item.platform}:${item.external_id}`;
+}
+
+/** 后端 raw 里带的收藏夹信息（目前只有 B 站插件写）。 */
+export function itemFolder(item: Item): string | null {
+  const folder = (item.raw as Record<string, unknown> | undefined)?.folder as
+    | { title?: string }
+    | undefined;
+  return folder?.title ?? null;
 }

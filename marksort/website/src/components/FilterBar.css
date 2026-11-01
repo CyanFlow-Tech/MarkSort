@@ -1,0 +1,102 @@
+/* 筛选条：方框、等宽字、下划线激活态，不用胶囊 */
+
+.filter-bar {
+  border-bottom: 1px solid var(--line);
+  background: rgba(8, 9, 11, 0.9);
+  backdrop-filter: blur(8px);
+  position: sticky;
+  top: 61px;
+  z-index: 15;
+  padding: 12px 28px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.filter-row {
+  max-width: 1440px;
+  margin: 0 auto;
+  width: 100%;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+
+.filter-row.folder-row {
+  max-height: 92px;
+  overflow-y: auto;
+  border-top: 1px dashed var(--line);
+  padding-top: 8px;
+}
+
+.chip {
+  background: transparent;
+  border: 1px solid var(--line);
+  border-radius: 0;
+  color: var(--text-mute);
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  padding: 6px 11px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  transition: color .15s ease, border-color .15s ease, background .15s ease;
+}
+
+.chip:hover {
+  color: var(--text-dim);
+  border-color: var(--line-strong);
+}
+
+.chip.active {
+  color: var(--accent);
+  border-color: var(--accent);
+  background: rgba(76, 194, 255, 0.07);
+}
+
+.chip.small {
+  padding: 4px 9px;
+  font-size: 10px;
+  border-color: transparent;
+  border-left: 1px solid var(--line);
+}
+
+.chip.small.active {
+  border-color: transparent;
+  border-left-color: var(--accent);
+  background: transparent;
+}
+
+.chip-count {
+  color: var(--text-mute);
+  font-size: 10px;
+  opacity: .85;
+}
+
+.chip.active .chip-count { color: var(--accent); }
+
+.filter-search {
+  margin-left: auto;
+  min-width: 240px;
+  background: var(--bg);
+  color: var(--text);
+  border: 1px solid var(--line-strong);
+  border-radius: 0;
+  padding: 7px 11px;
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  outline: none;
+  transition: border-color .15s ease;
+}
+
+.filter-search::placeholder { color: var(--text-mute); }
+.filter-search:focus { border-color: var(--accent); }
+
+@media (max-width: 860px) {
+  .filter-bar { padding: 10px 16px; top: 0; position: static; }
+  .filter-search { margin-left: 0; width: 100%; min-width: 0; }
+}

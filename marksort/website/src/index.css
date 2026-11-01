@@ -1,43 +1,79 @@
 :root {
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
-    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
-    sans-serif;
-  line-height: 1.5;
-  font-weight: 400;
+  --bg: #08090b;
+  --surface: #0d1014;
+  --surface-2: #11161c;
+  --line: #1b222b;
+  --line-strong: #2a3543;
+  --text: #dde5ee;
+  --text-dim: #8a95a4;
+  --text-mute: #5a6472;
+  --accent: #4cc2ff;
+  --accent-dim: #12303f;
+  --ok: #3ddc97;
+  --warn: #e8b339;
+  --err: #ff5f66;
 
-  color-scheme: light;
-  color: #333;
-  background-color: #ffffff;
+  --mono: ui-monospace, "Cascadia Mono", "JetBrains Mono", Consolas, monospace;
+  --sans: "Inter", "Segoe UI", "Microsoft YaHei", system-ui, sans-serif;
 
-  font-synthesis: none;
-  text-rendering: optimizeLegibility;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
+  color-scheme: dark;
 }
 
 * {
   box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html,
+body,
+#root {
+  min-height: 100%;
 }
 
 body {
-  margin: 0;
-  min-width: 320px;
-  min-height: 100vh;
+  background-color: var(--bg);
+  /* 极淡网格，给一点工程感，不做花哨渐变 */
+  background-image:
+    linear-gradient(to right, rgba(76, 194, 255, 0.028) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(76, 194, 255, 0.028) 1px, transparent 1px);
+  background-size: 48px 48px;
+  color: var(--text);
+  font-family: var(--sans);
+  font-size: 14px;
+  line-height: 1.55;
+  -webkit-font-smoothing: antialiased;
 }
 
-#root {
-  width: 100%;
-  min-height: 100vh;
+a {
+  color: var(--accent);
+  text-decoration: none;
 }
 
-button {
-  font-family: inherit;
-  cursor: pointer;
-  border: none;
-  outline: none;
+code,
+pre {
+  font-family: var(--mono);
 }
 
-button:focus-visible {
-  outline: 2px solid #ff2442;
-  outline-offset: 2px;
+::selection {
+  background: var(--accent-dim);
+  color: var(--text);
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--bg);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--line-strong);
+  border: 2px solid var(--bg);
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #3a4655;
 }
